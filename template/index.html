@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Datacenter Optimization & Query Routing Simulation</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0b0f19; color: #e2e8f0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .card { background-color: #161e2e; border: 1px solid #2d3748; color: #fff; }
+        canvas { background-color: #050811; border-radius: 8px; border: 1px solid #1a202c; width: 100%; height: 380px; }
+        .stat-card { border-left: 4px solid #3182ce; }
+        .stat-card.green { border-left-color: #38a169; }
+        .stat-card.purple { border-left-color: #805ad5; }
+        .metric-val { font-size: 1.8rem; font-weight: bold; }
+    </style>
+</head>
+<body class="p-4">
+
+<div class="container-fluid">
+    <h3 class="fw-bold mb-3 text-primary">⚡ Dynamic AI Datacenter Quantization Router</h3>
+    
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card p-3 stat-card">
+                <span class="text-secondary small">Total Queries Processed</span>
+                <div class="metric-val" id="totalQueries">0</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 stat-card green">
+                <span class="text-secondary small">Cumulative Energy Saved</span>
+                <div class="metric-val text-success" id="totalSaved">0.00 kWh</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 stat-card purple">
+                <span class="text-secondary small">Avg. Energy Efficiency</span>
+                <div class="metric-val text-purple" id="avgSavings">0.0 %</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 stat-card">
+                <span class="text-secondary small">Active Precision Node</span>
+                <div class="metric-val text-warning" id="activeNode">STANDBY</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card p-4 h-100">
+                <h5 class="fw-bold mb-3">Simulate Incoming Workload Query</h5>
+                <form id="queryForm">
+                    <div class="mb-3">
+                        <label class="form-label">Query Description / Model Architecture</label>
+                        <select class="form-select bg-dark text-white border-secondary" id="queryType">
+                            <option value="LLM Inference">Large Language Model (LLaMA-7B)</option>
+                            <option value="Vision Pipeline">Vision Transformer (ViT-Base)</option>
+                            <option value="Realtime Detection">Object Detection (YOLOv8)</option>
+                            <option value="Speech Recognition">Whisper Audio Pipeline</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Baseline Latency SLA (ms): <span id="latVal" class="text-info">50</span></label>
+                        <input type="range" class="form-range" id="latencyInput" min="10" max="200" value="50" oninput="document.getElementById('latVal').innerText=this.value">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Baseline Energy Usage (kWh): <span id="engVal" class="text-info">2.5</span></label>
+                        <input type="range" class="form-range" id="energyInput" min="0.5" max="5.0" step="0.1" value="2.5" oninput="document.getElementById('engVal').innerText=this.value">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 fw-bold">Dispatch Query to Datacenter</button>
+                    <button type="button" class="btn btn-outline-success w-100 mt-2" onclick="startAutoStream()">Auto-Stream Workload</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card p-3 h-100">
+                <h5 class="fw-bold mb-2">Datacenter Hardware Node Simulation Canvas</h5>
+                <canvas id="datacenterCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('datacenterCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = canvas.offsetWidth;
+canvas.height = canvas.offsetHeight;
+
+// Metrics tracker
+let totalQueries = 0;
+let totalSavedKWh = 0;
+let savingsPctSum = 0;
+let autoInterval = null;
+
+// Nodes positions
+const routerNode = { x: 80, y: canvas.height / 2, label: 'XGBoost Router' };
+const targetNodes = {
+    'fp32': { x: canvas.width - 100, y: 50, color: '#e53e3e', label: 'FP32 Node (99.25%)' },
+    'fp16': { x: canvas.width - 100, y: 130, color: '#dd6b20', label: 'FP16 Node (99.00%)' },
+    'int8': { x: canvas.width - 100, y: 210, color: '#319795', label: 'INT8 Node (98.10%)' },
+    'int4': { x: canvas.width - 100, y: 290, color: '#38a169', label: 'INT4 Node (97.59%)' }
+};
+
+let activePackets = [];
+
+function drawNetwork() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw connecting paths
+    for (let key in targetNodes) {
+        ctx.beginPath();
+        ctx.moveTo(routerNode.x, routerNode.y);
+        ctx.lineTo(targetNodes[key].x, targetNodes[key].y);
+        ctx.strokeStyle = '#1a202c';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    // Draw Router Node
+    ctx.beginPath();
+    ctx.arc(routerNode.x, routerNode.y, 24, 0, Math.PI * 2);
+    ctx.fillStyle = '#3182ce';
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(routerNode.label, routerNode.x - 35, routerNode.y + 40);
+
+    // Draw Quantization Hardware Nodes
+    for (let key in targetNodes) {
+        let node = targetNodes[key];
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 20, 0, Math.PI * 2);
+        ctx.fillStyle = node.color;
+        ctx.fill();
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillText(node.label, node.x - 120, node.y + 5);
+    }
+
+    // Render Packet Animations
+    activePackets.forEach((p, index) => {
+        p.progress += 0.03;
+        let target = targetNodes[p.targetKey];
+        let currentX = routerNode.x + (target.x - routerNode.x) * p.progress;
+        let currentY = routerNode.y + (target.y - routerNode.y) * p.progress;
+
+        ctx.beginPath();
+        ctx.arc(currentX, currentY, 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#f6e05e';
+        ctx.fill();
+
+        if (p.progress >= 1.0) {
+            activePackets.splice(index, 1);
+        }
+    });
+
+    requestAnimationFrame(drawNetwork);
+}
+drawNetwork();
+
+async function dispatchQuery() {
+    const latency = document.getElementById('latencyInput').value;
+    const energy = document.getElementById('energyInput').value;
+
+    const res = await fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ latency, energy })
+    });
+    
+    const data = await res.json();
+
+    // Update canvas packet animation
+    activePackets.push({ targetKey: data.precision, progress: 0 });
+
+    // Update Real-Time Metrics
+    totalQueries++;
+    totalSavedKWh += data.saved_energy;
+    savingsPctSum += data.savings_percentage;
+
+    document.getElementById('totalQueries').innerText = totalQueries;
+    document.getElementById('totalSaved').innerText = `${totalSavedKWh.toFixed(2)} kWh`;
+    document.getElementById('avgSavings').innerText = `${(savingsPctSum / totalQueries).toFixed(1)} %`;
+    document.getElementById('activeNode').innerText = data.precision.toUpperCase();
+}
+
+document.getElementById('queryForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    dispatchQuery();
+});
+
+function startAutoStream() {
+    if (autoInterval) {
+        clearInterval(autoInterval);
+        autoInterval = null;
+    } else {
+        autoInterval = setInterval(() => {
+            document.getElementById('latencyInput').value = Math.floor(Math.random() * 180 + 10);
+            document.getElementById('energyInput').value = (Math.random() * 4.5 + 0.5).toFixed(1);
+            document.getElementById('latVal').innerText = document.getElementById('latencyInput').value;
+            document.getElementById('engVal').innerText = document.getElementById('energyInput').value;
+            dispatchQuery();
+        }, 1200);
+    }
+}
+</script>
+</body>
+</html>

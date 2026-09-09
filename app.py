@@ -53,14 +53,14 @@ def train_optimizer_model():
         base_eng = float(row[eng_col])
         
         # Thresholds tailored to dataset values
-        if base_eng > 60.0 or base_lat > 25.0:
-            return 'int4'   # Heavy energy/latency -> max compression (int4)
-        elif base_eng > 40.0 or base_lat > 15.0:
-            return 'int8'   # Medium workload -> balanced compression (int8)
-        elif base_eng > 30.0 or base_lat > 10.0:
-            return 'fp16'   # Moderate workload -> half-precision (fp16)
+        if base_eng <= 20.0 and base_lat <= 8.0:
+            return 'fp32'
+        elif base_eng <= 40.0 or base_lat <= 15.0:
+            return 'fp16'
+        elif base_eng <= 65.0 or base_lat <= 25.0:
+            return 'int8'
         else:
-            return 'fp32'   # Low resource workload -> full precision (fp32)
+            return 'int4'
 
     df_clean['Optimal_Quantization'] = df_clean.apply(select_constrained_quantization, axis=1)
 
